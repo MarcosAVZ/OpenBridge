@@ -1,6 +1,8 @@
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { resolveIdeasDir } from '../../src/ideas/curation-files.js';
 import {
-  assignKeys,
+  resolveKeys,
   ideaFileName,
   parseIdeaFile,
   reviewIdeas,
@@ -40,22 +42,45 @@ describe('slugify', () => {
   });
 });
 
-describe('assignKeys', () => {
+describe('resolveKeys', () => {
+  const never = () => false;
+
   it('conserva las claves existentes y deriva el resto sin repetir', () => {
-    const keys = assignKeys([
-      { id: 'a', key: null, title: 'Cobros' },
-      { id: 'b', key: 'cobros', title: 'Otro título' },
-      { id: 'c', key: null, title: 'Cobros' },
-    ]);
+    const keys = resolveKeys(
+      [
+        { id: 'a', key: null, title: 'Cobros' },
+        { id: 'b', key: 'cobros', title: 'Otro título' },
+        { id: 'c', key: null, title: 'Cobros' },
+      ],
+      [],
+      never,
+    );
     expect(keys.get('b')).toBe('cobros');
     expect(keys.get('a')).toBe('cobros-2');
     expect(keys.get('c')).toBe('cobros-3');
+  });
+
+  it('adopta la clave del archivo solo si el contenido coincide', () => {
+    const rows = [{ id: 'a', key: null, title: 'Cobros' }];
+    expect(resolveKeys(rows, [{ key: 'cobros' }], () => true).get('a')).toBe('cobros');
+    expect(resolveKeys(rows, [{ key: 'cobros' }], never).get('a')).toBe('cobros-2');
   });
 });
 
 describe('ideaFileName', () => {
   it('convierte owner/name en un nombre de archivo', () => {
     expect(ideaFileName('stripe/stripe-node')).toBe('stripe__stripe-node.yaml');
+  });
+});
+
+describe('resolveIdeasDir', () => {
+  it('resuelve rutas relativas contra la raíz del repo, no contra el cwd', () => {
+    expect(resolveIdeasDir('mis-ideas', '/repo')).toBe(resolve('/repo', 'mis-ideas'));
+  });
+
+  it('respeta rutas absolutas y usa seed/ideas por defecto', () => {
+    expect(resolveIdeasDir(resolve('/otra'), '/repo')).toBe(resolve('/otra'));
+    expect(resolveIdeasDir(undefined, '/repo')).toBe(resolve('/repo', 'seed/ideas'));
   });
 });
 
@@ -137,6 +162,31 @@ describe('reviewIdeas', () => {
     const [flagged] = reviewIdeas([file([idea({ connectsWith: ['nadie/nada'] })])], known);
     expect(flagged.flags.map((f) => f.code)).toContain('UNKNOWN_CONNECTION');
     expect(flagged.flags[0].detail).toContain('nadie/nada');
+  });
+
+  it('no marca separadores ni listas de ceros como repetición', () => {
+    const code = [
+      `// ${'-'.repeat(40)}`,
+      `const zeros = [${'0, '.repeat(20)}0];`,
+      "fetch('https://api.example.com/items');",
+    ].join('\n');
+    expect(
+      codes([
+        idea({ integrationType: 'REST_API', triggers: [], snippet: { language: 'ts', code } }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('no toma requestedValue como evidencia de REST_API', () => {
+    const snippet = { language: 'ts', code: 'const requestedValue = compute(items, 10);' };
+    expect(codes([idea({ integrationType: 'REST_API', triggers: [], snippet })])).toContain(
+      'TYPE_MISMATCH',
+    );
+  });
+
+  it('no toma useHook() como evidencia de WEBHOOK', () => {
+    const snippet = { language: 'ts', code: 'const value = useHook(); return value + 1;' };
+    expect(codes([idea({ snippet })])).toContain('TYPE_MISMATCH');
   });
 
   it('solo revisa ideas en DRAFT', () => {

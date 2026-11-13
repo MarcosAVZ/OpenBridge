@@ -104,8 +104,10 @@ npm run db:ideas -w backend -- review               # 3. alertas objetivas sobre
 npm run db:ideas -w backend -- apply --embed        # 5. después del merge: aplicar a la base (+ vectores, requiere Ollama)
 ```
 
-- `export` refleja la base: si la base es nueva, corré `apply` antes para no pisar estados ya revisados.
+- `export` fusiona con los archivos existentes: para las claves que ya están conserva el estado, la fuente y el contenido del archivo, y solo agrega las ideas de la base que faltan (y archivos para repos sin uno). Una base desactualizada no revierte lo revisado.
+- Las ideas **no se borran** del YAML: para retirar una, poné `status: REJECTED`. `apply` nunca borra y lista las ideas de la base que faltan en el archivo.
 - `apply` valida con el mismo esquema Zod, es idempotente y imprime cuántos repos tienen al menos una idea aprobada frente a la meta del 90 %. Si el contenido del archivo difiere del de una idea del modelo, la fuente pasa a `HUMAN`. Repos desconocidos se informan sin cortar.
+- `--dir` relativo se resuelve contra la raíz del repo.
 - `--embed` genera los vectores de las ideas aprobadas; sin la bandera, los toma `db:embed` o la próxima `db:sync`.
 - `review` marca fragmentos vacíos o triviales, repeticiones degeneradas, tipo incoherente con el código (p. ej. `DOCKER` sin docker/compose) y `connectsWith` a repos desconocidos. Aprobar es siempre una decisión humana.
 

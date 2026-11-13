@@ -10,7 +10,16 @@ import { ideaContentSchema, requireWebhookTriggers } from './schema.js';
 // Mínimo de caracteres para que un fragmento no sea trivial.
 const MIN_SNIPPET_LENGTH = 20;
 // Una unidad de 3 a 40 caracteres repetida 8 veces seguidas no es código real.
-const REPETITION = /(.{3,40}?)\1{7,}/s;
+// La unidad tiene que tener alguna letra: separadores (`-----`) y listas de
+// ceros no son degeneración.
+const REPETITION = /(.{3,40}?)\1{7,}/gs;
+
+function repeatedUnit(text: string): string | undefined {
+  for (const match of text.matchAll(REPETITION)) {
+    if (/\p{L}/u.test(match[1])) return match[1].trim();
+  }
+  return undefined;
+}
 
 export const fileIdeaSchema = ideaContentSchema
   .extend({
@@ -45,26 +54,34 @@ export function ideaFileName(repo: string): string {
   return `${repo.replace('/', '__')}.yaml`;
 }
 
-// Claves de las ideas de un repo, en el orden recibido: las que ya tienen se
-// respetan y al resto se les deriva una del título, con sufijo -2, -3 si se repite.
-export function assignKeys(
-  ideas: { id: string; key: string | null; title: string }[],
+// Claves de las ideas de un repo, en el orden recibido. Las que ya tienen se
+// respetan. A las demás se les deriva una del título (sufijo -2, -3 si se
+// repite); si el archivo ya tiene esa clave, la idea solo la adopta cuando
+// sameContent confirma que es la misma idea. Si no, es otra y sigue de largo.
+export function resolveKeys<R extends { id: string; key: string | null; title: string }>(
+  rows: R[],
+  fileIdeas: { key: string }[],
+  sameContent: (row: R, key: string) => boolean,
 ): Map<string, string> {
   const keys = new Map<string, string>();
   const taken = new Set<string>();
-  for (const { id, key } of ideas) {
+  const fileKeys = new Set(fileIdeas.map((i) => i.key));
+  for (const { id, key } of rows) {
     if (key) {
       keys.set(id, key);
       taken.add(key);
     }
   }
-  for (const { id, key, title } of ideas) {
-    if (key) continue;
-    const base = slugify(title);
+  for (const row of rows) {
+    if (row.key) continue;
+    const base = slugify(row.title);
     let candidate = base;
-    for (let n = 2; taken.has(candidate); n += 1) candidate = `${base}-${n}`;
+    for (let n = 2; ; n += 1) {
+      if (!taken.has(candidate) && (!fileKeys.has(candidate) || sameContent(row, candidate))) break;
+      candidate = `${base}-${n}`;
+    }
     taken.add(candidate);
-    keys.set(id, candidate);
+    keys.set(row.id, candidate);
   }
   return keys;
 }
@@ -144,11 +161,11 @@ export interface FlaggedIdea {
 
 // Lo que se espera ver en el fragmento según el tipo de integración.
 const TYPE_EVIDENCE: Partial<Record<FileIdea['integrationType'], RegExp>> = {
-  DOCKER: /docker|compose|\bFROM\s+\S|\bimage:|services:|container/i,
+  DOCKER: /docker|compose|\bFROM\s+\S|\bimage:|services:|\bcontainers?\b/i,
   CLI: /\s--?[a-z]|\b(npx?|pnpm|yarn|pip|brew|cargo|curl|wget|bash|argv|spawn|exec)\b|\bcli\b/i,
   REST_API:
-    /https?:|\bfetch\b|axios|curl|request|\.(get|post|put|patch|delete)\(|endpoint|\/api\//i,
-  WEBHOOK: /webhook|hook|signature|event|payload|\.post\(|\bPOST\b/i,
+    /https?:|\bfetch\b|\baxios\b|\bcurl\b|\brequests?\b|\.(get|post|put|patch|delete)\(|\bendpoint\b|\/api\//i,
+  WEBHOOK: /\bwebhooks?\b|\bsignature\b|\bevent\b|\bpayload\b|\.post\(|\bPOST\b/i,
 };
 
 const collapse = (text: string) => text.replace(/\s+/g, ' ');
@@ -176,11 +193,14 @@ export function reviewIdeas(files: IdeaFile[], knownRepos: ReadonlySet<string>):
         ['title', idea.title],
         ['summary', idea.summary],
         ['snippet', code],
-      ].find(([, text]) => REPETITION.test(collapse(text)));
+      ].flatMap(([field, text]) => {
+        const unit = repeatedUnit(collapse(text));
+        return unit ? [{ field, unit }] : [];
+      })[0];
       if (repeated) {
         flags.push({
           code: 'DEGENERATE_REPETITION',
-          detail: `Texto repetido en ${repeated[0]}: ${collapse(repeated[1]).match(REPETITION)?.[1]?.trim()}`,
+          detail: `Texto repetido en ${repeated.field}: ${repeated.unit}`,
         });
       }
 

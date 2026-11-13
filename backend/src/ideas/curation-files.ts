@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { ideaFileName, parseIdeaFile, serializeIdeaFile, type IdeaFile } from './curation.js';
 
 // Lee todos los .yaml del directorio, en orden de nombre. Un directorio que
@@ -31,4 +31,10 @@ export async function writeIdeaFiles(dir: string, files: IdeaFile[]): Promise<vo
   for (const file of files) {
     await writeFile(join(dir, ideaFileName(file.repo)), serializeIdeaFile(file), 'utf8');
   }
+}
+
+// --dir relativo se resuelve contra la raíz del repo y no contra el cwd
+// (npm -w ejecuta en backend/).
+export function resolveIdeasDir(dir: string | undefined, repositoryRoot: string): string {
+  return resolve(repositoryRoot, dir ?? 'seed/ideas');
 }

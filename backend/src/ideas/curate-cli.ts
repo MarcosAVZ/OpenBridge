@@ -3,11 +3,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createDb } from '../db/client.js';
-import { formatEmbeddingReport, generateEmbeddings } from '../ingest/embeddings.js';
+import { formatEmbeddingReport } from '../ingest/embeddings.js';
 import { parseInitialInventory } from '../ingest/initial-load.js';
 import { reviewIdeas } from './curation.js';
-import { applyIdeaFiles, exportIdeas, type ApplyReport } from './curation-db.js';
-import { readIdeaFiles, writeIdeaFiles } from './curation-files.js';
+import { applyCuration, exportIdeas, type ApplyReport } from './curation-db.js';
+import { readIdeaFiles, resolveIdeasDir, writeIdeaFiles } from './curation-files.js';
 
 // npm run db:ideas -- <export|apply|review> [--dir seed/ideas] [--embed]
 //   export  vuelca las ideas de la base a seed/ideas/ (un archivo por repo)
@@ -22,7 +22,7 @@ const { values, positionals } = parseArgs({
   options: { dir: { type: 'string' }, embed: { type: 'boolean', default: false } },
 });
 const [command] = positionals;
-const dir = resolve(values.dir ?? resolve(repositoryRoot, 'seed/ideas'));
+const dir = resolveIdeasDir(values.dir, repositoryRoot);
 
 function formatApplyReport(report: ApplyReport): string {
   const { statusCounts: s, coverage: c } = report;
@@ -32,6 +32,17 @@ function formatApplyReport(report: ApplyReport): string {
     `Repos con al menos una idea aprobada: ${c.withApproved}/${c.total} (${c.percent} %), meta ${c.goal} %` +
       (c.percent >= c.goal ? ': cumplida.' : ': todavía no se alcanza.'),
   ];
+  if (report.missing.length > 0) {
+    lines.push(
+      `  ! ${report.missing.length} ideas están en la base pero no en los archivos (no se borran; para retirar una, status: REJECTED):`,
+    );
+    for (const { repo, key } of report.missing) lines.push(`      ${repo} / ${key}`);
+  }
+  for (const { repo, key } of report.collisions) {
+    lines.push(
+      `  ! ${repo} / ${key}: se insertó como idea nueva; la base tiene otra idea sin clave con el mismo título`,
+    );
+  }
   for (const repo of report.unknownRepos) lines.push(`  ! Repo desconocido (se omitió): ${repo}`);
   for (const { repo, key, reason } of report.skipped) {
     lines.push(`  ! Idea omitida ${repo} / ${key}: ${reason}`);
@@ -72,17 +83,18 @@ async function main(): Promise<void> {
   const { db, pool } = createDb(databaseUrl);
   try {
     if (command === 'export') {
-      const files = await exportIdeas(db);
+      const files = await exportIdeas(db, await readIdeaFiles(dir));
       await writeIdeaFiles(dir, files);
       const total = files.reduce((sum, f) => sum + f.ideas.length, 0);
       console.log(`Exportadas ${total} ideas de ${files.length} repos a ${dir}`);
       return;
     }
 
-    const report = await applyIdeaFiles(db, await readIdeaFiles(dir));
+    const { report, embeddings } = await applyCuration(db, await readIdeaFiles(dir), {
+      embed: values.embed,
+    });
     console.log(formatApplyReport(report));
-    if (values.embed) {
-      const embeddings = await generateEmbeddings(db);
+    if (embeddings) {
       console.log(formatEmbeddingReport(embeddings));
       if (embeddings.failed.length > 0) process.exitCode = 1;
     } else {
