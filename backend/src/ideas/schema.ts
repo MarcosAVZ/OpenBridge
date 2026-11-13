@@ -18,7 +18,7 @@ const snippetSchema = z.object({
 // El contenido de la idea: lo que escribe una persona o genera el modelo.
 // Los enums salen del schema de Drizzle para que la base y la validación no
 // se desincronicen.
-const ideaContentSchema = z.object({
+export const ideaContentSchema = z.object({
   title: nonEmpty,
   summary: nonEmpty,
   integrationType: z.enum(integrationType.enumValues),
@@ -28,7 +28,7 @@ const ideaContentSchema = z.object({
   difficulty: z.enum(ideaDifficulty.enumValues),
 });
 
-function requireWebhookTriggers(
+export function requireWebhookTriggers(
   idea: z.output<typeof ideaContentSchema>,
   ctx: z.RefinementCtx,
 ): void {
