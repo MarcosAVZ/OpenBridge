@@ -120,6 +120,10 @@ export const integrationIdea = pgTable(
     repositoryId: uuid('repository_id')
       .notNull()
       .references(() => repository.id, { onDelete: 'cascade' }),
+    // Identidad estable dentro del repo para la curaduría versionada
+    // (seed/ideas/, OB-19): el uuid cambia en cada base, la clave no. Es
+    // nula en ideas que todavía no pasaron por `db:ideas apply`.
+    key: text('key'),
     title: text('title').notNull(),
     summary: text('summary').notNull(),
     integrationType: integrationType('integration_type').notNull(),
@@ -152,6 +156,7 @@ export const integrationIdea = pgTable(
       sql`${t.snippet} IS NULL OR coalesce(trim(${t.snippet}->>'language'), '') <> ''`,
     ),
     index('integration_idea_repository_id_idx').on(t.repositoryId),
+    uniqueIndex('integration_idea_repository_key_idx').on(t.repositoryId, t.key),
   ],
 );
 

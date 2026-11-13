@@ -43,6 +43,13 @@
       "when": 1793973243628,
       "tag": "0005_embedding_bge_m3",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794569862704,
+      "tag": "0006_add_integration_idea_key",
+      "breakpoints": true
     }
   ]
 }
