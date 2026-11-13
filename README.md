@@ -91,6 +91,24 @@ En Windows conviene Ollama nativo: usa la GPU (también AMD) y genera unas 3 ide
 
 Necesita `DATABASE_URL` y `GITHUB_TOKEN` en `backend/.env`. Para Ollama se usan, si están definidas, `OLLAMA_BASE_URL` (por defecto `http://localhost:11434`) y `OLLAMA_MODEL` (por defecto `qwen2.5:7b`). Si una respuesta no cumple el esquema, se reintenta una vez; si vuelve a fallar, se descarta y queda en `backend/reports/ideas-report.json` con el motivo y la respuesta del modelo.
 
+### Curaduría de ideas (OB-19)
+
+Las ideas nacen en `DRAFT` y el catálogo, el asistente y la búsqueda solo usan las `APPROVED`. La curaduría vive versionada en `seed/ideas/<owner>__<name>.yaml` (un archivo por repo, así cada PR toca solo los repos que se revisan y hay menos conflictos). Cada idea se identifica por `repo` + `key` (un slug estable), no por el uuid de la base, y lleva `status`, `source` y el contenido completo; `connectsWith` usa nombres de repo.
+
+```bash
+npm run db:generate-ideas -w backend -- --limit 5   # 1. generar borradores
+npm run db:ideas -w backend -- export               # 2. volcar la base a seed/ideas/
+npm run db:ideas -w backend -- review               # 3. alertas objetivas sobre los DRAFT (no aprueba nada)
+# 4. revisar el archivo con la checklist (tipo correcto, el snippet compila/corre, compatibilidad real)
+#    y poner status: APPROVED o REJECTED; corregir el contenido si hace falta; PR
+npm run db:ideas -w backend -- apply --embed        # 5. después del merge: aplicar a la base (+ vectores, requiere Ollama)
+```
+
+- `export` refleja la base: si la base es nueva, corré `apply` antes para no pisar estados ya revisados.
+- `apply` valida con el mismo esquema Zod, es idempotente y imprime cuántos repos tienen al menos una idea aprobada frente a la meta del 90 %. Si el contenido del archivo difiere del de una idea del modelo, la fuente pasa a `HUMAN`. Repos desconocidos se informan sin cortar.
+- `--embed` genera los vectores de las ideas aprobadas; sin la bandera, los toma `db:embed` o la próxima `db:sync`.
+- `review` marca fragmentos vacíos o triviales, repeticiones degeneradas, tipo incoherente con el código (p. ej. `DOCKER` sin docker/compose) y `connectsWith` a repos desconocidos. Aprobar es siempre una decisión humana.
+
 ## Catálogo: filtros y búsqueda por texto
 
 `GET /api/v1/repositories` combina filtros y búsqueda por texto:

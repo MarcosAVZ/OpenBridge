@@ -14,6 +14,7 @@
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env src/db/seed.ts",
     "db:load-initial": "tsx --env-file-if-exists=.env src/ingest/initial-load-cli.ts",
+    "db:ideas": "tsx --env-file-if-exists=.env src/ideas/curate-cli.ts",
     "db:generate-ideas": "tsx --env-file-if-exists=.env src/ideas/generate-cli.ts",
     "db:sync": "tsx --env-file-if-exists=.env src/ingest/sync-cli.ts",
     "db:embed": "tsx --env-file-if-exists=.env src/ingest/embed-cli.ts",
