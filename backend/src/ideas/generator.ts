@@ -63,8 +63,9 @@ export async function generateIdeas(
   return { status: 'created', ideas };
 }
 
-// Repos que todavía no tienen ideas generadas, los más populares primero.
-// Las ideas escritas a mano no cuentan: no impiden sumar borradores.
+// Repos sin ninguna idea (de cualquier origen o estado), los más populares
+// primero. Una idea HUMAN también cuenta: si no, curar un repo lo volvería a
+// regenerar.
 export async function selectRepositoriesWithoutIdeas(
   db: Db,
   { fullName, limit }: { fullName?: string; limit?: number } = {},
@@ -78,12 +79,7 @@ export async function selectRepositoriesWithoutIdeas(
           db
             .select({ id: integrationIdea.id })
             .from(integrationIdea)
-            .where(
-              and(
-                eq(integrationIdea.repositoryId, repository.id),
-                eq(integrationIdea.source, 'LLM'),
-              ),
-            ),
+            .where(eq(integrationIdea.repositoryId, repository.id)),
         ),
         fullName ? sql`lower(${repository.fullName}) = lower(${fullName})` : undefined,
       ),

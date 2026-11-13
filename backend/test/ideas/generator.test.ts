@@ -155,10 +155,9 @@ describe('selectRepositoriesWithoutIdeas', () => {
 
   const names = (rows: Array<typeof repository.$inferSelect>) => rows.map((r) => r.fullName);
 
-  it('saltea los repos que ya tienen ideas generadas y ordena por estrellas', async () => {
+  it('saltea los repos con cualquier idea (LLM o HUMAN) y ordena por estrellas', async () => {
     expect(names(await selectRepositoriesWithoutIdeas(t.db))).toEqual([
       'acme/popular',
-      'acme/with-human',
       'acme/small',
     ]);
   });
