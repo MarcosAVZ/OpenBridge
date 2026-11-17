@@ -183,3 +183,9 @@ Seguimos [Conventional Commits](https://www.conventionalcommits.org/es/): `tipo(
 feat(api): add tool search endpoint
 fix(web): fix category filter in catalog
 ```
+
+## Licencia
+
+OpenBridge es software libre bajo la licencia [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+Podés usar, estudiar, modificar y redistribuir el código. Si publicás una versión modificada, también en un servidor al que otras personas acceden por la red, tenés que poner el código fuente de esa versión a disposición de sus usuarios, bajo la misma licencia.
